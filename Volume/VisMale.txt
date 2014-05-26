@@ -1,0 +1,11 @@
+C:\MVSProjects\pvm2pgm\x64\Debug\VisMale\
+Volume\TransferFunctions\VisMaleSkin.mtf
+1
+256
+pgm
+1.5
+0.995861
+1.00797
+0
+2
+1	
