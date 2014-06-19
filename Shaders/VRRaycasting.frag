@@ -3,7 +3,6 @@ uniform sampler3D minMaxOctree;
 uniform sampler2D transferFunction;
 uniform sampler2D frontFrameBuffer;
 uniform sampler2D backFrameBuffer;
-uniform sampler2D diffuseHDRImage;
 uniform float stepSize;
 uniform float IBLScaleFactor;
 uniform int windowWidth;
@@ -11,18 +10,40 @@ uniform int windowHeight;
 uniform int useTransferFunction;
 uniform int useIBL;
 
+//Spherical Harmonics values
+uniform vec3 L00;
+uniform vec3 L1m1;
+uniform vec3 L10;
+uniform vec3 L11;
+uniform vec3 L2m2;
+uniform vec3 L2m1;
+uniform vec3 L20;
+uniform vec3 L21;
+uniform vec3 L22;
+
+//Spherical Harmonics constants
+const float C1 = 0.429043;
+const float C2 = 0.511664;
+const float C3 = 0.743125;
+const float C4 = 0.886227;
+const float C5 = 0.247708;
+
 vec3 diffuseIBLIllumination(vec3 N)
 {
 
-   float x = 1.0 + atan(N.x, -N.z)/3.14;
-   float y = acos(N.y)/3.14;
-   x = x * 0.5;
-   if(x < 0.001 || x > 0.999) x = 0.999;
+   vec3 diffuseColor = C1 * L22 * (N.x * N.x - N.y * N.y) +
+		C3 * L20 * N.z * N.z +
+		C4 * L00 -
+		C5 * L20 +
+		2.0 * C1 * L2m2 * N.x * N.y +
+		2.0 * C1 * L21 * N.x * N.z +
+		2.0 * C1 * L2m1 * N.y * N.z +
+		2.0 * C2 * L11 * N.x +
+		2.0 * C2 * L1m1 * N.y +
+		2.0 * C2 * L10 * N.z;
 
-   vec4 diffuseColor = texture2D(diffuseHDRImage, vec2(x, y));
-   
    //calculate Diffuse Term:  
-   vec4 Idiff = IBLScaleFactor * diffuseColor;
+   vec4 Idiff = IBLScaleFactor * vec4(diffuseColor, 0.0);
 
    // write Total Color:  
    return vec3(Idiff);  
@@ -32,7 +53,7 @@ vec3 diffuseIBLIllumination(vec3 N)
 vec4 computeIllumination(vec4 scalar, vec3 position) 
 {
 
-	if(scalar.a > 0.075) {
+	if(scalar.a > 0.025) {
 	
 		float delta = 0.01;
 		vec3 sample1, sample2;
@@ -51,8 +72,9 @@ vec4 computeIllumination(vec4 scalar, vec3 position)
 		vec3 N = normalize(sample2 - sample1);
 
 		//we consider the volume color our diffuse material
+		if(N.x > -1 && N.y > -1 && N.z > -1)
 		scalar.rgb += diffuseIBLIllumination(N);
-		
+	
 	}
 
 	return scalar;

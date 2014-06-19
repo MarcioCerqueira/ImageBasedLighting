@@ -20,8 +20,9 @@ public:
 	void loadFrameBufferTexture(GLuint *texVBO, int index, int x, int y, int width, int height);
 	void drawRGBTextureOnShader(GLuint *texVBO, int index, GLuint shaderProg, int imageWidth, int imageHeight);
 	void draw2DTexture(GLuint *texVBO, int index, GLuint shaderProg, int windowWidth, int windowHeight);
-	void draw3DTexture(GLuint *texVBO, GLuint *VBO, GLuint hdrImage, GLuint shaderProg, int windowWidth, int windowHeight, VRParams params);
+	void draw3DTexture(GLuint *texVBO, GLuint *VBO, float *SHCoeffs, GLuint shaderProg, int windowWidth, int windowHeight, VRParams params);
 	void drawFinalRendering(GLuint texVolume, GLuint texScene, GLuint shaderProg, int windowWidth, int windowHeight);
+	void drawSHCoeffs(GLuint shaderProg, float *SHCoeffs);
 	void drawQuads(float x, float y, float z, GLenum target = GL_TEXTURE0);
 private:
 	unsigned char *frameBuffer;

@@ -12,6 +12,8 @@
 #include "VolumeRendering\Volume.h"
 #include "VolumeRendering\MinMaxOctree.h"
 #include "VolumeRendering\TransferFunction.h"
+#include "HDR\HDRImage.h"
+#include "HDR\LightProbeCapture.h"
 
 //Window size
 int windowWidth = 640;
@@ -25,6 +27,9 @@ int currentTime = 0, previousTime = 0;
 cv::Mat cubeMap;
 cv::Mat cubeFaces[6];
 cv::Mat hdrMap;
+char IBLext[3];
+float IBLScaleFactor = 1;
+
 
 GLuint texCube[6];
 GLuint texVolume[10];
@@ -43,6 +48,8 @@ VRParams vrparams;
 Volume *volume;
 MinMaxOctree *minMaxOctree;
 TransferFunction *transferFunction;
+HDRImage *hdrImage;
+LightProbeCapture *lightProbeCapture;
 
 GLfloat eye[3] = { 0.0, 0.0, 4.0 };
 GLfloat at[3]  = { 0.0, 0.0, 0.0 };
@@ -55,6 +62,8 @@ int vel = 1;
 
 bool translation = false;
 bool rotation = false;
+bool IBLScale = false;
+bool cubeMapLoaded = false;
 
 GLuint ProgramObject = 0;
 GLuint VertexShaderObject = 0;
@@ -107,7 +116,10 @@ void loadArguments(int argc, char **argv) {
 		std::cout << line << std::endl;
 		std::getline(file, line);
 		std::cout << line << std::endl;
-		cubeMap = cv::imread(line.c_str());	
+		if(strcmp(line.c_str(), "0")) {
+			cubeMap = cv::imread(line.c_str());	
+			cubeMapLoaded = true;
+		}
 		std::getline(file, line);
 		std::cout << line << std::endl;
 
@@ -115,7 +127,13 @@ void loadArguments(int argc, char **argv) {
 		std::cout << line << std::endl;
 		std::getline(file, line);
 		std::cout << line << std::endl;
-		hdrMap = cv::hdrImread(line.c_str(), CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_COLOR);
+		strcpy(IBLext, line.c_str());
+		std::getline(file, line);
+		std::cout << line << std::endl;
+		if(!strcmp(IBLext, "hdr"))
+			hdrMap = cv::hdrImread(line.c_str(), CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_COLOR);
+		else if(strcmp(IBLext, "cam"))
+			hdrMap = cv::imread(line.c_str());
 		std::getline(file, line);
 		std::cout << line << std::endl;
 		
@@ -159,8 +177,11 @@ void loadArguments(int argc, char **argv) {
 			
 		}
 
-		cv::cvtColor(cubeMap, cubeMap, CV_BGR2RGB);
-		cv::cvtColor(hdrMap, hdrMap, CV_BGR2RGB);
+		if(cubeMapLoaded)
+			cv::cvtColor(cubeMap, cubeMap, CV_BGR2RGB);
+		if(strcmp(IBLext, "cam"))
+			cv::cvtColor(hdrMap, hdrMap, CV_BGR2RGB);
+
 	}
 
 }
@@ -183,6 +204,17 @@ void loadVolumeData() {
 	transferFunction->load(vrparams.transferFunctionPath);
 	transferFunction->computePreIntegrationTable();
 	
+}
+
+
+
+void precomputeSphericalHarmonics() {
+	
+	hdrImage = new HDRImage(256, 256);
+	hdrImage->computeCoordinates();
+	hdrImage->computeDomegaProduct();
+	hdrImage->setScale(0.05);
+
 }
 
 void displayQuadForVolumeRendering(bool front) 
@@ -226,7 +258,7 @@ void displayMedicalVolume()
 	glMatrixMode(GL_TEXTURE);
 	glLoadIdentity();
 
-	myGLTextureViewer->draw3DTexture(texVolume, bufQuad, texHDR[0], shaderProg[1], windowWidth, windowHeight, vrparams);
+	myGLTextureViewer->draw3DTexture(texVolume, bufQuad, hdrImage->getSHCoeffs(), shaderProg[1], windowWidth, windowHeight, vrparams);
 	
 	glActiveTexture(GL_TEXTURE0);
 	glDisable(GL_TEXTURE_2D);
@@ -260,10 +292,15 @@ void displayPolygonalScene()
 	glRotatef(-180, 0, 0, 1);
 	glEnable(GL_LIGHTING);
 
-	myGLTextureViewer->draw2DTexture(texHDR, 0, shaderProg[0], windowWidth, windowHeight);
+	glUseProgram(shaderProg[0]);
+
 	GLuint texLoc = glGetUniformLocation(shaderProg[0], "mode");
 	glUniform1i(texLoc, mode);
+	texLoc = glGetUniformLocation(shaderProg[0], "scaleFactor");
+	glUniform1f(texLoc, IBLScaleFactor);
 	
+	myGLTextureViewer->drawSHCoeffs(shaderProg[0], hdrImage->getSHCoeffs());
+
 	//draw sphere
 	glutSolidSphere(1.0, 50, 40);
 	
@@ -275,8 +312,30 @@ void displayPolygonalScene()
 
 }
 
+void computeSHCoeffs()
+{
+
+	cv::cvtColor(hdrMap, hdrMap, CV_BGR2RGB);
+	cv::resize(hdrMap, hdrMap, cv::Size(256, 256));
+
+	if(hdrMap.type() == CV_32FC3)
+		hdrImage->load(hdrMap.ptr<float>());
+	else
+		hdrImage->load(hdrMap.ptr<unsigned char>());
+
+	hdrImage->setScale(1);
+	hdrImage->computeSHCoeffs();
+	
+}
+
 void display()
 {
+
+	if(!strcmp(IBLext, "cam")) {
+		lightProbeCapture->captureSphericalMap();
+		hdrMap = lightProbeCapture->getImage();
+	}
+	computeSHCoeffs();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, backQuadFrameBuffer);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -305,7 +364,7 @@ void display()
 	glLoadIdentity();
 
 	myGLTextureViewer->drawFinalRendering(texVolume[7], texScene[0], shaderProg[3], windowWidth, windowHeight);
-
+	
 	glutSwapBuffers();
 	glutPostRedisplay();
 
@@ -321,6 +380,8 @@ void keyboard(unsigned char key, int x, int y)
 
 	translation = false;
 	rotation = false;
+	IBLScale = false;
+
 	switch(key) {
 	case 27:
 		exit(0);
@@ -342,6 +403,12 @@ void keyboard(unsigned char key, int x, int y)
 	case 'f':
 		vrparams.useTransferFunction = !vrparams.useTransferFunction;
 		break;
+	case 'i':
+		IBLScale = true;
+		break;
+	case 'l':
+		lightProbeCapture->incrementLightProbeSize();
+		break;
 	}
 }
 
@@ -353,12 +420,20 @@ void specialKeyboard(int key, int x, int y)
 			translationVector[1] += vel;
 		if(rotation)
 			rotationAngles[1] += 5 * vel;
+		if(IBLScale) {
+			vrparams.IBLScaleFactor += 0.001;
+			IBLScaleFactor += 0.01;
+		}
 		break;
 	case GLUT_KEY_DOWN:
 		if(translation)
 			translationVector[1] -= vel;
 		if(rotation)
 			rotationAngles[1] -= 5 * vel;
+		if(IBLScale) {
+			vrparams.IBLScaleFactor -= 0.001;
+			IBLScaleFactor -= 0.01;
+		}
 		break;
 	case GLUT_KEY_LEFT:
 		if(translation)
@@ -383,7 +458,6 @@ void specialKeyboard(int key, int x, int y)
 			translationVector[2] -= vel;
 		if(rotation)
 			rotationAngles[2] -= 5 * vel;
-		std::cout << rotationAngles[0] << " " << rotationAngles[1] << " " << rotationAngles[2] << std::endl;
 		break;
 	default:
 		break;
@@ -418,85 +492,88 @@ void initGL() {
 	myGLTextureViewer = new MyGLTextureViewer();
 
 	//Load cube faces
-	int faceWidth = cubeMap.cols/3;
-	int faceHeight = cubeMap.rows/4;
-
-	cubeFaces[CUBE_UP] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
+	if(cubeMapLoaded) {
 	
-	int oldPixel = 0;
-	int newPixel = 0;
+		int faceWidth = cubeMap.cols/3;
+		int faceHeight = cubeMap.rows/4;
 
-	for(int y = 0; y < faceHeight; y++) {
-		for(int x = faceWidth; x < 2 * faceWidth; x++) {
-			oldPixel = y * cubeMap.cols + x;
-			newPixel = y * faceWidth + (x - faceWidth);
-			for(int ch = 0; ch < 3; ch++)
-				cubeFaces[CUBE_UP].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+		cubeFaces[CUBE_UP] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
+	
+		int oldPixel = 0;
+		int newPixel = 0;
+
+		for(int y = 0; y < faceHeight; y++) {
+			for(int x = faceWidth; x < 2 * faceWidth; x++) {
+				oldPixel = y * cubeMap.cols + x;
+				newPixel = y * faceWidth + (x - faceWidth);
+				for(int ch = 0; ch < 3; ch++)
+					cubeFaces[CUBE_UP].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+			}
 		}
-	}
 
-	cubeFaces[CUBE_LEFT] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
+		cubeFaces[CUBE_LEFT] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
 
-	for(int y = faceHeight; y < 2 * faceHeight; y++) {
-		for(int x = 0; x < faceWidth; x++) {
-			oldPixel = y * cubeMap.cols + x;
-			newPixel = (y - faceHeight) * faceWidth + x;
-			for(int ch = 0; ch < 3; ch++)
-				cubeFaces[CUBE_LEFT].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+		for(int y = faceHeight; y < 2 * faceHeight; y++) {
+			for(int x = 0; x < faceWidth; x++) {
+				oldPixel = y * cubeMap.cols + x;
+				newPixel = (y - faceHeight) * faceWidth + x;
+				for(int ch = 0; ch < 3; ch++)
+					cubeFaces[CUBE_LEFT].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+			}
 		}
-	}
 
-	cubeFaces[CUBE_FRONT] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
+		cubeFaces[CUBE_FRONT] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
 
-	for(int y = faceHeight; y < 2 * faceHeight; y++) {
-		for(int x = faceWidth; x < 2 * faceWidth; x++) {
-			oldPixel = y * cubeMap.cols + x;
-			newPixel = (y - faceHeight) * faceWidth + (x - faceWidth);
-			for(int ch = 0; ch < 3; ch++)
-				cubeFaces[CUBE_FRONT].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+		for(int y = faceHeight; y < 2 * faceHeight; y++) {
+			for(int x = faceWidth; x < 2 * faceWidth; x++) {
+				oldPixel = y * cubeMap.cols + x;
+				newPixel = (y - faceHeight) * faceWidth + (x - faceWidth);
+				for(int ch = 0; ch < 3; ch++)
+					cubeFaces[CUBE_FRONT].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+			}
 		}
-	}
 
-	cubeFaces[CUBE_RIGHT] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
+		cubeFaces[CUBE_RIGHT] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
 
-	for(int y = faceHeight; y < 2 * faceHeight; y++) {
-		for(int x = 2 * faceWidth; x < 3 * faceWidth; x++) {
-			oldPixel = y * cubeMap.cols + x;
-			newPixel = (y - faceHeight) * faceWidth + (x - 2 * faceWidth);
-			for(int ch = 0; ch < 3; ch++)
-				cubeFaces[CUBE_RIGHT].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+		for(int y = faceHeight; y < 2 * faceHeight; y++) {
+			for(int x = 2 * faceWidth; x < 3 * faceWidth; x++) {
+				oldPixel = y * cubeMap.cols + x;
+				newPixel = (y - faceHeight) * faceWidth + (x - 2 * faceWidth);
+				for(int ch = 0; ch < 3; ch++)
+					cubeFaces[CUBE_RIGHT].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+			}
 		}
-	}
 
-	cubeFaces[CUBE_DOWN] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
+		cubeFaces[CUBE_DOWN] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
 
-	for(int y = 2 * faceHeight; y < 3 * faceHeight; y++) {
-		for(int x = faceWidth; x < 2 * faceWidth; x++) {
-			oldPixel = y * cubeMap.cols + x;
-			newPixel = (y - 2 * faceHeight) * faceWidth + (x - faceWidth);
-			for(int ch = 0; ch < 3; ch++)
-				cubeFaces[CUBE_DOWN].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+		for(int y = 2 * faceHeight; y < 3 * faceHeight; y++) {
+			for(int x = faceWidth; x < 2 * faceWidth; x++) {
+				oldPixel = y * cubeMap.cols + x;
+				newPixel = (y - 2 * faceHeight) * faceWidth + (x - faceWidth);
+				for(int ch = 0; ch < 3; ch++)
+					cubeFaces[CUBE_DOWN].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+			}
 		}
-	}
 
-	cubeFaces[CUBE_BACK] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
+		cubeFaces[CUBE_BACK] = cv::Mat(faceHeight, faceWidth, cubeMap.type());
 
-	for(int y = 3 * faceHeight; y < 4 * faceHeight; y++) {
-		for(int x = faceWidth; x < 2 * faceWidth; x++) {
-			oldPixel = y * cubeMap.cols + x;
-			newPixel = (y - 3 * faceHeight) * faceWidth + (x - faceWidth);
-			for(int ch = 0; ch < 3; ch++)
-				cubeFaces[CUBE_BACK].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+		for(int y = 3 * faceHeight; y < 4 * faceHeight; y++) {
+			for(int x = faceWidth; x < 2 * faceWidth; x++) {
+				oldPixel = y * cubeMap.cols + x;
+				newPixel = (y - 3 * faceHeight) * faceWidth + (x - faceWidth);
+				for(int ch = 0; ch < 3; ch++)
+					cubeFaces[CUBE_BACK].ptr<unsigned char>()[newPixel * 3 + ch] = cubeMap.ptr<unsigned char>()[oldPixel * 3 + ch];
+			}
 		}
-	}
 
-	myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_FRONT].ptr<unsigned char>(), texCube, CUBE_FRONT, faceWidth, faceHeight);
-	myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_BACK].ptr<unsigned char>(), texCube, CUBE_BACK, faceWidth, faceHeight);
-	myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_UP].ptr<unsigned char>(), texCube, CUBE_UP, faceWidth, faceHeight);
-	myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_DOWN].ptr<unsigned char>(), texCube, CUBE_DOWN, faceWidth, faceHeight);
-	myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_LEFT].ptr<unsigned char>(), texCube, CUBE_LEFT, faceWidth, faceHeight);
-	myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_RIGHT].ptr<unsigned char>(), texCube, CUBE_RIGHT, faceWidth, faceHeight);
-	myGLTextureViewer->loadRGBTexture(hdrMap.ptr<float>(), texHDR, 0, hdrMap.cols, hdrMap.rows);
+		myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_FRONT].ptr<unsigned char>(), texCube, CUBE_FRONT, faceWidth, faceHeight);
+		myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_BACK].ptr<unsigned char>(), texCube, CUBE_BACK, faceWidth, faceHeight);
+		myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_UP].ptr<unsigned char>(), texCube, CUBE_UP, faceWidth, faceHeight);
+		myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_DOWN].ptr<unsigned char>(), texCube, CUBE_DOWN, faceWidth, faceHeight);
+		myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_LEFT].ptr<unsigned char>(), texCube, CUBE_LEFT, faceWidth, faceHeight);
+		myGLTextureViewer->loadRGBTexture(cubeFaces[CUBE_RIGHT].ptr<unsigned char>(), texCube, CUBE_RIGHT, faceWidth, faceHeight);
+
+	}
 
 	myGLTextureViewer->load3DTextureFromTIFFile(volume->getData(), texVolume, 0, volume->getWidth(), volume->getHeight(), volume->getDepth(), GL_LINEAR);
 	myGLTextureViewer->load3DTextureFromTIFFile(minMaxOctree->getData(), texVolume, 2, minMaxOctree->getWidth(), minMaxOctree->getHeight(), minMaxOctree->getDepth(), GL_LINEAR);
@@ -564,6 +641,9 @@ int main(int argc, char **argv) {
 
 	loadArguments(argc, argv);
 	loadVolumeData();
+	if(!strcmp(IBLext, "cam"))
+		lightProbeCapture = new LightProbeCapture();
+	precomputeSphericalHarmonics();
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_ALPHA);
@@ -591,6 +671,9 @@ int main(int argc, char **argv) {
 	delete minMaxOctree;
 	delete transferFunction;
 	delete myGLTextureViewer;
+	delete hdrImage;
+	if(!strcmp(IBLext, "cam"))
+		delete lightProbeCapture;
 	return 0;
 
 }

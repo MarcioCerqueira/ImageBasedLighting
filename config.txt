@@ -1,8 +1,8 @@
 Cube Map (LDR):
 StPeters/cubeprobe.png
 
-Latitude Longitude Map - Diffuse Convolution (HDR):
-StPeters/DiffProbe.hdr
+Light Probe Map:
+StPeters/AngProbe.hdr
 
 .obj file:
 obj/al.obj

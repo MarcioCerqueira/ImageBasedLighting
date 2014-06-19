@@ -131,7 +131,7 @@ void MyGLTextureViewer::draw2DTexture(GLuint *texVBO, int index, GLuint shaderPr
 	
 }
 
-void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, GLuint hdrImage, GLuint shaderProg, int windowWidth, int windowHeight, VRParams params) {
+void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, float *SHCoeffs, GLuint shaderProg, int windowWidth, int windowHeight, VRParams params) {
 
 	glUseProgram(shaderProg);
 
@@ -169,6 +169,8 @@ void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, GLuint hdrIma
 		glUniform1i(texLoc, 0);
 	}
 	
+	drawSHCoeffs(shaderProg, SHCoeffs);
+
 	if(params.useIBL) {
 		texLoc = glGetUniformLocation(shaderProg, "useIBL");
 		glUniform1i(texLoc, 1);
@@ -200,14 +202,6 @@ void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, GLuint hdrIma
 	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, texVBO[4]);
 
-	texLoc = glGetUniformLocation(shaderProg, "diffuseHDRImage");
-	glUniform1i(texLoc, 8);
-
-	glActiveTexture(GL_TEXTURE8);
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, hdrImage);
-
-
 	glUseProgram(0);
 	
 	glActiveTexture(GL_TEXTURE2);
@@ -220,8 +214,6 @@ void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, GLuint hdrIma
 	glDisable(GL_TEXTURE_2D);
 	glActiveTexture(GL_TEXTURE7);
 	glDisable(GL_TEXTURE_3D);
-	glActiveTexture(GL_TEXTURE8);
-	glDisable(GL_TEXTURE_2D);
 
 }
 
@@ -263,6 +255,29 @@ void MyGLTextureViewer::drawFinalRendering(GLuint texVolume, GLuint texScene, GL
 	
 }
 	
+void MyGLTextureViewer::drawSHCoeffs(GLuint shaderProg, float *SHCoeffs) {
+
+	GLuint texLoc = glGetUniformLocation(shaderProg, "L00");
+	glUniform3f(texLoc, SHCoeffs[0 * 3 + 0], SHCoeffs[0 * 3 + 1], SHCoeffs[0 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L1m1");
+	glUniform3f(texLoc, SHCoeffs[1 * 3 + 0], SHCoeffs[1 * 3 + 1], SHCoeffs[1 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L10");
+	glUniform3f(texLoc, SHCoeffs[2 * 3 + 0], SHCoeffs[2 * 3 + 1], SHCoeffs[2 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L11");
+	glUniform3f(texLoc, SHCoeffs[3 * 3 + 0], SHCoeffs[3 * 3 + 1], SHCoeffs[3 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L2m2");
+	glUniform3f(texLoc, SHCoeffs[4 * 3 + 0], SHCoeffs[4 * 3 + 1], SHCoeffs[4 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L2m1");
+	glUniform3f(texLoc, SHCoeffs[5 * 3 + 0], SHCoeffs[5 * 3 + 1], SHCoeffs[5 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L20");
+	glUniform3f(texLoc, SHCoeffs[6 * 3 + 0], SHCoeffs[6 * 3 + 1], SHCoeffs[6 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L21");
+	glUniform3f(texLoc, SHCoeffs[7 * 3 + 0], SHCoeffs[7 * 3 + 1], SHCoeffs[7 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "L22");
+	glUniform3f(texLoc, SHCoeffs[8 * 3 + 0], SHCoeffs[8 * 3 + 1], SHCoeffs[8 * 3 + 2]);
+	
+}
+
 void MyGLTextureViewer::drawQuads(float x, float y, float z, GLenum target) {
 	
 	bool color = true;
