@@ -1,5 +1,4 @@
 //Spherical Harmonics values
-
 uniform vec3 L00;
 uniform vec3 L1m1;
 uniform vec3 L10;
@@ -10,6 +9,10 @@ uniform vec3 L20;
 uniform vec3 L21;
 uniform vec3 L22;
 
+//Specular SH values
+uniform vec3 lightDir;
+uniform vec3 lightColor;
+
 //Spherical Harmonics constants
 const float C1 = 0.429043;
 const float C2 = 0.511664;
@@ -17,8 +20,12 @@ const float C3 = 0.743125;
 const float C4 = 0.886227;
 const float C5 = 0.247708;
 
+//SH aux
+uniform float diffuseScaleFactor;
+uniform float specularScaleFactor;
+uniform float shininess;
+
 uniform int mode;
-uniform float scaleFactor;
 varying vec3 N;
 varying vec3 v;
 
@@ -45,9 +52,8 @@ vec4 phong()
 
 }
 
-vec4 ibl()
+vec4 diffuseIBL() 
 {
-
 
    vec3 diffuseColor = C1 * L22 * (N.x * N.x - N.y * N.y) +
 		C3 * L20 * N.z * N.z +
@@ -65,10 +71,27 @@ vec4 ibl()
    if(diffuseColor.b < 0) diffuseColor.b *= -1;
 
    //calculate Diffuse Term:  
-   vec4 Idiff = gl_FrontMaterial.diffuse * scaleFactor * vec4(diffuseColor, 1.0);
+   vec4 Idiff = gl_FrontMaterial.diffuse * diffuseScaleFactor * vec4(diffuseColor, 1.0);
+   return Idiff;
 
-   // write Total Color:  
-   return Idiff;  
+}
+
+vec4 specularIBL()
+{
+
+   vec3 E = normalize(-v); // we are in Eye Coordinates, so EyePos is (0,0,0)  
+   vec3 R = normalize(-reflect(vec3(lightDir.x, lightDir.y, lightDir.z), N));  
+   vec4 Ispec = vec4(lightColor, 1.0) * pow(max(dot(R,E),0.0), 0.3 * shininess) * specularScaleFactor;
+   return Ispec;
+
+}
+
+vec4 ibl()
+{
+
+   vec4 diffuseColor = diffuseIBL();
+   vec4 specularColor = specularIBL();
+   return diffuseColor + specularColor;
 
 }
 

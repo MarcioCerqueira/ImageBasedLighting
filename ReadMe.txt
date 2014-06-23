@@ -13,4 +13,6 @@ Light Probe Map:
 cam
 cam
 
-which enables the webcam to capture the light probe in real-time. (Obviously, the SH Coefficients are computed in real-time. This process is done by using the approach proposed by "An Efficient Representation for Irradiance Environment Maps");
+which enables the webcam to capture the light probe in real-time. 
+
+Obviously, the SH Coefficients are computed in real-time. This process is done by using the approach proposed by "An Efficient Representation for Irradiance Environment Maps". Moreover, to compute dominant light direction and color, the approach proposed in "Light Factorization for Mixed-Frequency Shadows in Augmented Reality" is employed.

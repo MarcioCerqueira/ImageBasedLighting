@@ -14,6 +14,7 @@
 #include "VolumeRendering\TransferFunction.h"
 #include "HDR\HDRImage.h"
 #include "HDR\LightProbeCapture.h"
+#include "HDR\HDRParams.h"
 
 //Window size
 int windowWidth = 640;
@@ -50,6 +51,7 @@ MinMaxOctree *minMaxOctree;
 TransferFunction *transferFunction;
 HDRImage *hdrImage;
 LightProbeCapture *lightProbeCapture;
+HDRParams hdrparams;
 
 GLfloat eye[3] = { 0.0, 0.0, 4.0 };
 GLfloat at[3]  = { 0.0, 0.0, 0.0 };
@@ -62,7 +64,9 @@ int vel = 1;
 
 bool translation = false;
 bool rotation = false;
-bool IBLScale = false;
+bool diffuseScale = false;
+bool specularScale = false;
+bool shininessScale = false;
 bool cubeMapLoaded = false;
 
 GLuint ProgramObject = 0;
@@ -182,6 +186,10 @@ void loadArguments(int argc, char **argv) {
 		if(strcmp(IBLext, "cam"))
 			cv::cvtColor(hdrMap, hdrMap, CV_BGR2RGB);
 
+		hdrparams.shininess = 1;
+		hdrparams.diffuseScaleFactor = 1;
+		hdrparams.specularScaleFactor = 1;
+
 	}
 
 }
@@ -235,7 +243,6 @@ void displayQuadForVolumeRendering(bool front)
 	glRotatef(rotationAngles[vrparams.rotationZ] - 15, 0, 0, 1);
 	
 	//draw volume - 1st part
-	
 	if(!front) {
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_FRONT);
@@ -258,7 +265,7 @@ void displayMedicalVolume()
 	glMatrixMode(GL_TEXTURE);
 	glLoadIdentity();
 
-	myGLTextureViewer->draw3DTexture(texVolume, bufQuad, hdrImage->getSHCoeffs(), shaderProg[1], windowWidth, windowHeight, vrparams);
+	myGLTextureViewer->draw3DTexture(texVolume, bufQuad, shaderProg[1], windowWidth, windowHeight, vrparams, hdrparams);
 	
 	glActiveTexture(GL_TEXTURE0);
 	glDisable(GL_TEXTURE_2D);
@@ -296,10 +303,8 @@ void displayPolygonalScene()
 
 	GLuint texLoc = glGetUniformLocation(shaderProg[0], "mode");
 	glUniform1i(texLoc, mode);
-	texLoc = glGetUniformLocation(shaderProg[0], "scaleFactor");
-	glUniform1f(texLoc, IBLScaleFactor);
 	
-	myGLTextureViewer->drawSHCoeffs(shaderProg[0], hdrImage->getSHCoeffs());
+	myGLTextureViewer->drawSHCoeffs(shaderProg[0], hdrparams);
 
 	//draw sphere
 	glutSolidSphere(1.0, 50, 40);
@@ -315,7 +320,8 @@ void displayPolygonalScene()
 void computeSHCoeffs()
 {
 
-	cv::cvtColor(hdrMap, hdrMap, CV_BGR2RGB);
+	if(!strcmp(IBLext, "cam"))
+		cv::cvtColor(hdrMap, hdrMap, CV_BGR2RGB);
 	cv::resize(hdrMap, hdrMap, cv::Size(256, 256));
 
 	if(hdrMap.type() == CV_32FC3)
@@ -325,7 +331,10 @@ void computeSHCoeffs()
 
 	hdrImage->setScale(1);
 	hdrImage->computeSHCoeffs();
-	
+	hdrImage->computeDominantLightDirection();
+	hdrImage->computeDominantLightColor();
+	hdrImage->load(&hdrparams);
+
 }
 
 void display()
@@ -380,7 +389,9 @@ void keyboard(unsigned char key, int x, int y)
 
 	translation = false;
 	rotation = false;
-	IBLScale = false;
+	diffuseScale = false;
+	specularScale = false;
+	shininessScale = false;
 
 	switch(key) {
 	case 27:
@@ -403,8 +414,14 @@ void keyboard(unsigned char key, int x, int y)
 	case 'f':
 		vrparams.useTransferFunction = !vrparams.useTransferFunction;
 		break;
-	case 'i':
-		IBLScale = true;
+	case '1':
+		diffuseScale = true;
+		break;
+	case '2':
+		specularScale = true;
+		break;
+	case '3':
+		shininessScale = true;
 		break;
 	case 'l':
 		lightProbeCapture->incrementLightProbeSize();
@@ -420,20 +437,24 @@ void specialKeyboard(int key, int x, int y)
 			translationVector[1] += vel;
 		if(rotation)
 			rotationAngles[1] += 5 * vel;
-		if(IBLScale) {
-			vrparams.IBLScaleFactor += 0.001;
-			IBLScaleFactor += 0.01;
-		}
+		if(diffuseScale)
+			hdrparams.diffuseScaleFactor += 0.01;
+		if(specularScale) 
+			hdrparams.specularScaleFactor += 0.01;
+		if(shininessScale)
+			hdrparams.shininess += 1;
 		break;
 	case GLUT_KEY_DOWN:
 		if(translation)
 			translationVector[1] -= vel;
 		if(rotation)
 			rotationAngles[1] -= 5 * vel;
-		if(IBLScale) {
-			vrparams.IBLScaleFactor -= 0.001;
-			IBLScaleFactor -= 0.01;
-		}
+		if(diffuseScale)
+			hdrparams.diffuseScaleFactor -= 0.01;
+		if(specularScale) 
+			hdrparams.specularScaleFactor -= 0.01;
+		if(shininessScale)
+			hdrparams.shininess -= 1;
 		break;
 	case GLUT_KEY_LEFT:
 		if(translation)

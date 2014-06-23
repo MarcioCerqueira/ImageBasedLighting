@@ -131,7 +131,8 @@ void MyGLTextureViewer::draw2DTexture(GLuint *texVBO, int index, GLuint shaderPr
 	
 }
 
-void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, float *SHCoeffs, GLuint shaderProg, int windowWidth, int windowHeight, VRParams params) {
+void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, GLuint shaderProg, int windowWidth, int windowHeight, 
+	VRParams vrparams, HDRParams hdrparams) {
 
 	glUseProgram(shaderProg);
 
@@ -150,7 +151,7 @@ void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, float *SHCoef
 	glBindTexture(GL_TEXTURE_3D, texVBO[2]);
 
 	texLoc = glGetUniformLocation(shaderProg, "stepSize");
-	glUniform1f(texLoc, params.stepSize);
+	glUniform1f(texLoc, vrparams.stepSize);
 
 	texLoc = glGetUniformLocation(shaderProg, "windowWidth");
 	glUniform1i(texLoc, windowWidth);
@@ -158,10 +159,7 @@ void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, float *SHCoef
 	texLoc = glGetUniformLocation(shaderProg, "windowHeight");
 	glUniform1i(texLoc, windowHeight);
 
-	texLoc = glGetUniformLocation(shaderProg, "IBLScaleFactor");
-	glUniform1f(texLoc, params.IBLScaleFactor);
-
-	if(params.useTransferFunction) {
+	if(vrparams.useTransferFunction) {
 		texLoc = glGetUniformLocation(shaderProg, "useTransferFunction");
 		glUniform1i(texLoc, 1);
 	} else {
@@ -169,9 +167,9 @@ void MyGLTextureViewer::draw3DTexture(GLuint *texVBO, GLuint *VBO, float *SHCoef
 		glUniform1i(texLoc, 0);
 	}
 	
-	drawSHCoeffs(shaderProg, SHCoeffs);
+	drawSHCoeffs(shaderProg, hdrparams);
 
-	if(params.useIBL) {
+	if(vrparams.useIBL) {
 		texLoc = glGetUniformLocation(shaderProg, "useIBL");
 		glUniform1i(texLoc, 1);
 	} else {
@@ -255,26 +253,36 @@ void MyGLTextureViewer::drawFinalRendering(GLuint texVolume, GLuint texScene, GL
 	
 }
 	
-void MyGLTextureViewer::drawSHCoeffs(GLuint shaderProg, float *SHCoeffs) {
+void MyGLTextureViewer::drawSHCoeffs(GLuint shaderProg, HDRParams params) {
 
 	GLuint texLoc = glGetUniformLocation(shaderProg, "L00");
-	glUniform3f(texLoc, SHCoeffs[0 * 3 + 0], SHCoeffs[0 * 3 + 1], SHCoeffs[0 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[0 * 3 + 0], params.SHCoeffs[0 * 3 + 1], params.SHCoeffs[0 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L1m1");
-	glUniform3f(texLoc, SHCoeffs[1 * 3 + 0], SHCoeffs[1 * 3 + 1], SHCoeffs[1 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[1 * 3 + 0], params.SHCoeffs[1 * 3 + 1], params.SHCoeffs[1 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L10");
-	glUniform3f(texLoc, SHCoeffs[2 * 3 + 0], SHCoeffs[2 * 3 + 1], SHCoeffs[2 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[2 * 3 + 0], params.SHCoeffs[2 * 3 + 1], params.SHCoeffs[2 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L11");
-	glUniform3f(texLoc, SHCoeffs[3 * 3 + 0], SHCoeffs[3 * 3 + 1], SHCoeffs[3 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[3 * 3 + 0], params.SHCoeffs[3 * 3 + 1], params.SHCoeffs[3 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L2m2");
-	glUniform3f(texLoc, SHCoeffs[4 * 3 + 0], SHCoeffs[4 * 3 + 1], SHCoeffs[4 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[4 * 3 + 0], params.SHCoeffs[4 * 3 + 1], params.SHCoeffs[4 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L2m1");
-	glUniform3f(texLoc, SHCoeffs[5 * 3 + 0], SHCoeffs[5 * 3 + 1], SHCoeffs[5 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[5 * 3 + 0], params.SHCoeffs[5 * 3 + 1], params.SHCoeffs[5 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L20");
-	glUniform3f(texLoc, SHCoeffs[6 * 3 + 0], SHCoeffs[6 * 3 + 1], SHCoeffs[6 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[6 * 3 + 0], params.SHCoeffs[6 * 3 + 1], params.SHCoeffs[6 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L21");
-	glUniform3f(texLoc, SHCoeffs[7 * 3 + 0], SHCoeffs[7 * 3 + 1], SHCoeffs[7 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[7 * 3 + 0], params.SHCoeffs[7 * 3 + 1], params.SHCoeffs[7 * 3 + 2]);
 	texLoc = glGetUniformLocation(shaderProg, "L22");
-	glUniform3f(texLoc, SHCoeffs[8 * 3 + 0], SHCoeffs[8 * 3 + 1], SHCoeffs[8 * 3 + 2]);
+	glUniform3f(texLoc, params.SHCoeffs[8 * 3 + 0], params.SHCoeffs[8 * 3 + 1], params.SHCoeffs[8 * 3 + 2]);
+	texLoc = glGetUniformLocation(shaderProg, "lightDir");
+	glUniform3f(texLoc, params.dominantLightDirection[0], params.dominantLightDirection[1], params.dominantLightDirection[2]);
+	texLoc = glGetUniformLocation(shaderProg, "lightColor");
+	glUniform3f(texLoc, params.dominantLightColor[0], params.dominantLightColor[1], params.dominantLightColor[2]);
+	texLoc = glGetUniformLocation(shaderProg, "diffuseScaleFactor");
+	glUniform1f(texLoc, params.diffuseScaleFactor);
+	texLoc = glGetUniformLocation(shaderProg, "specularScaleFactor");
+	glUniform1f(texLoc, params.specularScaleFactor);
+	texLoc = glGetUniformLocation(shaderProg, "shininess");
+	glUniform1f(texLoc, params.shininess);
 	
 }
 

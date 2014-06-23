@@ -198,6 +198,68 @@ void HDRImage::computeSphericalMap() {
 	
 }
 
+void HDRImage::computeDominantLightDirection() {
+	
+	float SH1Band[3][3];
+	float sum;
+
+	for(int coo = 0; coo < 3; coo++)
+		dominantLightDirection[coo] = 0;
+
+	for(int ch = 0; ch < 3; ch++) {
+
+		sum = 0;
+
+		for(int index = 1; index < 4; index++)
+			sum += SHCoeffs[index * 3 + ch] * SHCoeffs[index * 3 + ch];
+	
+		sum = sqrtf(sum);
+
+		SH1Band[0][ch] = -SHCoeffs[3 * 3 + ch] / sum;
+		SH1Band[1][ch] = -SHCoeffs[1 * 3 + ch] / sum;
+		SH1Band[2][ch] = SHCoeffs[2 * 2 + ch] / sum;
+
+	}
+
+	for(int coo = 0; coo < 3; coo++)
+		dominantLightDirection[coo] = SH1Band[coo][0] * 0.3 + SH1Band[coo][1] * 0.59 + SH1Band[coo][2] * 0.11;
+
+	float mod = sqrtf(dominantLightDirection[0] * dominantLightDirection[0] + 
+		dominantLightDirection[1] * dominantLightDirection[1] + dominantLightDirection[2] * dominantLightDirection[2]);
+
+	for(int coo = 0; coo < 3; coo++)
+		dominantLightDirection[coo] /= mod;
+
+	//some correction
+	dominantLightDirection[0] *= -1;
+	dominantLightDirection[1] *= -1;
+
+}
+
+void HDRImage::computeDominantLightColor() {
+	
+	float alpha = 16 * PI/17;
+
+	float sh1 = 0.488602511 * dominantLightDirection[1];
+	float sh2 = 0.488602511 * dominantLightDirection[2];
+	float sh3 = 0.488602511 * dominantLightDirection[0];
+
+	sh1 *= alpha;
+	sh2 *= alpha;
+	sh3 *= alpha;
+
+	float denom = sh1 * sh1 + sh2 * sh2 + sh3 * sh3;
+
+	dominantLightColor[0] = SHCoeffs[1 * 3 + 0] * sh1 + SHCoeffs[2 * 3 + 0] * sh2 + SHCoeffs[3 * 3 + 0] * sh3;
+	dominantLightColor[1] = SHCoeffs[1 * 3 + 1] * sh1 + SHCoeffs[2 * 3 + 1] * sh2 + SHCoeffs[3 * 3 + 1] * sh3;
+	dominantLightColor[2] = SHCoeffs[1 * 3 + 2] * sh1 + SHCoeffs[2 * 3 + 2] * sh2 + SHCoeffs[3 * 3 + 2] * sh3;
+
+	dominantLightColor[0] /= denom;
+	dominantLightColor[1] /= denom;
+	dominantLightColor[2] /= denom;
+
+}
+
 void HDRImage::load(float *image) {
 	
 	memcpy(this->image, image, width * height * 3 * sizeof(float));
@@ -209,5 +271,18 @@ void HDRImage::load(unsigned char *image) {
 	for(int pixel = 0; pixel < width * height; pixel++)
 		for(int ch = 0; ch < 3; ch++)
 			this->image[pixel * 3 + ch] = image[pixel * 3 + ch]/255.f;
+
+}
+
+void HDRImage::load(HDRParams *params) {
+
+	for(int sh = 0; sh < 9; sh++)
+		for(int ch = 0; ch < 3; ch++)
+			params->SHCoeffs[sh * 3 + ch] = this->SHCoeffs[sh * 3 + ch];
+
+	for(int ch = 0; ch < 3; ch++) {
+		params->dominantLightDirection[ch] = this->dominantLightDirection[ch];
+		params->dominantLightColor[ch] = this->dominantLightColor[ch];
+	}
 
 }

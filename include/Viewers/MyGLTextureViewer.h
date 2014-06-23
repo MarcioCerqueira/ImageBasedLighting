@@ -5,6 +5,7 @@
 #include <GL/glut.h>
 #include <malloc.h>
 #include "VolumeRendering\VRParams.h"
+#include "HDR\HDRParams.h"
 
 class MyGLTextureViewer
 {
@@ -20,9 +21,9 @@ public:
 	void loadFrameBufferTexture(GLuint *texVBO, int index, int x, int y, int width, int height);
 	void drawRGBTextureOnShader(GLuint *texVBO, int index, GLuint shaderProg, int imageWidth, int imageHeight);
 	void draw2DTexture(GLuint *texVBO, int index, GLuint shaderProg, int windowWidth, int windowHeight);
-	void draw3DTexture(GLuint *texVBO, GLuint *VBO, float *SHCoeffs, GLuint shaderProg, int windowWidth, int windowHeight, VRParams params);
+	void draw3DTexture(GLuint *texVBO, GLuint *VBO, GLuint shaderProg, int windowWidth, int windowHeight, VRParams vrparams, HDRParams hdrParams);
 	void drawFinalRendering(GLuint texVolume, GLuint texScene, GLuint shaderProg, int windowWidth, int windowHeight);
-	void drawSHCoeffs(GLuint shaderProg, float *SHCoeffs);
+	void drawSHCoeffs(GLuint shaderProg, HDRParams params);
 	void drawQuads(float x, float y, float z, GLenum target = GL_TEXTURE0);
 private:
 	unsigned char *frameBuffer;
